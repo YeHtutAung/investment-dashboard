@@ -1,0 +1,23 @@
+{
+  "name": "api",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "wrangler deploy --dry-run",
+    "deploy": "wrangler deploy",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "wrangler d1 migrations apply investment-db --local",
+    "db:migrate:prod": "wrangler d1 migrations apply investment-db --remote"
+  },
+  "dependencies": {
+    "hono": "^4.4.0",
+    "shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240620.0",
+    "wrangler": "^3.60.0"
+  }
+}
