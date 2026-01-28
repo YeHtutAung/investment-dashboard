@@ -5,7 +5,8 @@ import google from './routes/google';
 import investments from './routes/investments';
 import goldPrices from './routes/gold-prices';
 import { authMiddleware } from './middleware/auth';
-import type { AppEnv } from './types';
+import { scheduled } from './scheduled';
+import type { AppEnv, Bindings } from './types';
 
 const app = new Hono<AppEnv>();
 
@@ -38,4 +39,7 @@ app.get('/api', (c) => {
   return c.json({ message: 'Investment Dashboard API' });
 });
 
-export default app;
+export default {
+  fetch: app.fetch,
+  scheduled,
+} satisfies ExportedHandler<Bindings>;

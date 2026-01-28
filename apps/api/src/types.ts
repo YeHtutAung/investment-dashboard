@@ -3,6 +3,7 @@ export type Bindings = {
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   FRONTEND_URL?: string;
+  GOLD_API_KEY?: string;
 };
 
 export type User = {

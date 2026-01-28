@@ -3,6 +3,12 @@ import { z } from 'zod';
 // Gold types
 export const goldTypeEnum = z.enum(['bar', 'coin', 'jewelry', 'other']);
 
+// Price source (AUTO = fetched from API, MANUAL = user entered)
+export const priceSourceEnum = z.enum(['AUTO', 'MANUAL']);
+
+// Market session (open = market open, close = market close)
+export const marketSessionEnum = z.enum(['open', 'close']);
+
 // Investment record (from DB)
 export const investmentSchema = z.object({
   id: z.string(),
@@ -37,8 +43,11 @@ export const updateInvestmentSchema = z.object({
 // Gold price record (for tracking market prices)
 export const goldPriceSchema = z.object({
   date: z.string(),
+  datetime: z.string().nullable(),
   pricePerGram: z.number().positive(),
   currency: z.string().default('USD'),
+  source: priceSourceEnum,
+  marketSession: marketSessionEnum.nullable(),
 });
 
 // Portfolio summary

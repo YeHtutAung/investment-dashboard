@@ -11,14 +11,24 @@ const createPriceSchema = z.object({
   currency: z.string().default('USD'),
 });
 
+type GoldPriceRow = {
+  date: string;
+  datetime: string | null;
+  price_per_gram: number;
+  currency: string;
+  source: string;
+  market_session: string | null;
+  created_at: string;
+};
+
 // GET /gold-prices/latest - Get latest gold price
 goldPrices.get('/latest', async (c) => {
   const row = await c.env.DB.prepare(`
-    SELECT date, price_per_gram, currency, created_at
+    SELECT date, datetime, price_per_gram, currency, source, market_session, created_at
     FROM gold_prices
-    ORDER BY date DESC
+    ORDER BY datetime DESC, date DESC
     LIMIT 1
-  `).first<{ date: string; price_per_gram: number; currency: string; created_at: string }>();
+  `).first<GoldPriceRow>();
 
   if (!row) {
     return c.json({
@@ -32,8 +42,11 @@ goldPrices.get('/latest', async (c) => {
     data: {
       price: {
         date: row.date,
+        datetime: row.datetime,
         pricePerGram: row.price_per_gram,
         currency: row.currency,
+        source: row.source,
+        marketSession: row.market_session,
         createdAt: row.created_at,
       },
     },
@@ -45,23 +58,26 @@ goldPrices.get('/', async (c) => {
   const limit = parseInt(c.req.query('limit') || '30');
 
   const results = await c.env.DB.prepare(`
-    SELECT date, price_per_gram, currency, created_at
+    SELECT date, datetime, price_per_gram, currency, source, market_session, created_at
     FROM gold_prices
-    ORDER BY date DESC
+    ORDER BY datetime DESC, date DESC
     LIMIT ?
-  `).bind(Math.min(limit, 365)).all();
+  `).bind(Math.min(limit, 365)).all<GoldPriceRow>();
 
   const prices = (results.results || []).map(row => ({
     date: row.date,
+    datetime: row.datetime,
     pricePerGram: row.price_per_gram,
     currency: row.currency,
+    source: row.source,
+    marketSession: row.market_session,
     createdAt: row.created_at,
   }));
 
   return c.json({ success: true, data: { prices } });
 });
 
-// POST /gold-prices - Add new price (upsert by date)
+// POST /gold-prices - Add new price (manual entry, upsert by date + NULL session)
 goldPrices.post('/', async (c) => {
   const body = await c.req.json();
   const parsed = createPriceSchema.safeParse(body);
@@ -74,20 +90,22 @@ goldPrices.post('/', async (c) => {
   }
 
   const { date, pricePerGram, currency } = parsed.data;
+  const datetime = new Date().toISOString();
 
-  // Upsert: insert or update if date exists
+  // Upsert: insert or update if date + NULL session exists
   await c.env.DB.prepare(`
-    INSERT INTO gold_prices (date, price_per_gram, currency)
-    VALUES (?, ?, ?)
-    ON CONFLICT(date) DO UPDATE SET
+    INSERT INTO gold_prices (date, datetime, price_per_gram, currency, source, market_session)
+    VALUES (?, ?, ?, ?, 'MANUAL', NULL)
+    ON CONFLICT(date, market_session) DO UPDATE SET
+      datetime = excluded.datetime,
       price_per_gram = excluded.price_per_gram,
       currency = excluded.currency
-  `).bind(date, pricePerGram, currency).run();
+  `).bind(date, datetime, pricePerGram, currency).run();
 
   return c.json({
     success: true,
     data: {
-      price: { date, pricePerGram, currency },
+      price: { date, datetime, pricePerGram, currency, source: 'MANUAL', marketSession: null },
     },
   }, 201);
 });
