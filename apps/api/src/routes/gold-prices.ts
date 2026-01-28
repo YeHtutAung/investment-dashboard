@@ -1,15 +1,22 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { errorCodes } from 'shared';
+import { SUPPORTED_CURRENCIES, type SupportedCurrency } from '../lib/gold-api';
 import type { AppEnv } from '../types';
 
 const goldPrices = new Hono<AppEnv>();
 
+const currencySchema = z.enum(['USD', 'SGD', 'JPY']);
+
 const createPriceSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
   pricePerGram: z.number().positive('Price must be greater than 0'),
-  currency: z.string().default('USD'),
+  currency: currencySchema.default('USD'),
 });
+
+function isValidCurrency(value: string): value is SupportedCurrency {
+  return SUPPORTED_CURRENCIES.includes(value as SupportedCurrency);
+}
 
 type GoldPriceRow = {
   date: string;
@@ -23,12 +30,16 @@ type GoldPriceRow = {
 
 // GET /gold-prices/latest - Get latest gold price
 goldPrices.get('/latest', async (c) => {
+  const currencyParam = c.req.query('currency') || 'USD';
+  const currency = isValidCurrency(currencyParam) ? currencyParam : 'USD';
+
   const row = await c.env.DB.prepare(`
     SELECT date, datetime, price_per_gram, currency, source, market_session, created_at
     FROM gold_prices
+    WHERE currency = ?
     ORDER BY datetime DESC, date DESC
     LIMIT 1
-  `).first<GoldPriceRow>();
+  `).bind(currency).first<GoldPriceRow>();
 
   if (!row) {
     return c.json({
@@ -56,13 +67,31 @@ goldPrices.get('/latest', async (c) => {
 // GET /gold-prices - List recent prices
 goldPrices.get('/', async (c) => {
   const limit = parseInt(c.req.query('limit') || '30');
+  const currencyParam = c.req.query('currency');
 
-  const results = await c.env.DB.prepare(`
-    SELECT date, datetime, price_per_gram, currency, source, market_session, created_at
-    FROM gold_prices
-    ORDER BY datetime DESC, date DESC
-    LIMIT ?
-  `).bind(Math.min(limit, 365)).all<GoldPriceRow>();
+  let query: string;
+  let bindings: (string | number)[];
+
+  if (currencyParam && isValidCurrency(currencyParam)) {
+    query = `
+      SELECT date, datetime, price_per_gram, currency, source, market_session, created_at
+      FROM gold_prices
+      WHERE currency = ?
+      ORDER BY datetime DESC, date DESC
+      LIMIT ?
+    `;
+    bindings = [currencyParam, Math.min(limit, 365)];
+  } else {
+    query = `
+      SELECT date, datetime, price_per_gram, currency, source, market_session, created_at
+      FROM gold_prices
+      ORDER BY datetime DESC, date DESC
+      LIMIT ?
+    `;
+    bindings = [Math.min(limit, 365)];
+  }
+
+  const results = await c.env.DB.prepare(query).bind(...bindings).all<GoldPriceRow>();
 
   const prices = (results.results || []).map(row => ({
     date: row.date,
@@ -77,7 +106,7 @@ goldPrices.get('/', async (c) => {
   return c.json({ success: true, data: { prices } });
 });
 
-// POST /gold-prices - Add new price (manual entry, upsert by date + NULL session)
+// POST /gold-prices - Add new price (manual entry, upsert by date + NULL session + currency)
 goldPrices.post('/', async (c) => {
   const body = await c.req.json();
   const parsed = createPriceSchema.safeParse(body);
@@ -92,14 +121,13 @@ goldPrices.post('/', async (c) => {
   const { date, pricePerGram, currency } = parsed.data;
   const datetime = new Date().toISOString();
 
-  // Upsert: insert or update if date + NULL session exists
+  // Upsert: insert or update if date + NULL session + currency exists
   await c.env.DB.prepare(`
     INSERT INTO gold_prices (date, datetime, price_per_gram, currency, source, market_session)
     VALUES (?, ?, ?, ?, 'MANUAL', NULL)
-    ON CONFLICT(date, market_session) DO UPDATE SET
+    ON CONFLICT(date, market_session, currency) DO UPDATE SET
       datetime = excluded.datetime,
-      price_per_gram = excluded.price_per_gram,
-      currency = excluded.currency
+      price_per_gram = excluded.price_per_gram
   `).bind(date, datetime, pricePerGram, currency).run();
 
   return c.json({

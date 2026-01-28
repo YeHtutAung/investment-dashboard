@@ -3,6 +3,9 @@ import { z } from 'zod';
 // Gold types
 export const goldTypeEnum = z.enum(['bar', 'coin', 'jewelry', 'other']);
 
+// Supported currencies for gold prices
+export const currencyEnum = z.enum(['USD', 'SGD', 'JPY']);
+
 // Price source (AUTO = fetched from API, MANUAL = user entered)
 export const priceSourceEnum = z.enum(['AUTO', 'MANUAL']);
 
@@ -45,7 +48,7 @@ export const goldPriceSchema = z.object({
   date: z.string(),
   datetime: z.string().nullable(),
   pricePerGram: z.number().positive(),
-  currency: z.string().default('USD'),
+  currency: currencyEnum,
   source: priceSourceEnum,
   marketSession: marketSessionEnum.nullable(),
 });

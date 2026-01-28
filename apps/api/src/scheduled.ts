@@ -1,4 +1,4 @@
-import { fetchGoldPrice } from './lib/gold-api';
+import { fetchAllGoldPrices } from './lib/gold-api';
 import type { Bindings } from './types';
 
 type MarketSession = 'open' | 'close';
@@ -29,22 +29,27 @@ export async function scheduled(
   }
 
   try {
-    const result = await fetchGoldPrice(env.GOLD_API_KEY);
+    const results = await fetchAllGoldPrices(env.GOLD_API_KEY);
 
-    console.log(`[scheduled] Fetched price: $${result.pricePerGram}/gram`);
+    console.log(`[scheduled] Fetched prices for ${results.length} currencies`);
 
-    // Insert or update price for this date + session
-    await env.DB.prepare(`
+    // Batch insert all currency prices
+    const stmt = env.DB.prepare(`
       INSERT INTO gold_prices (date, datetime, price_per_gram, currency, source, market_session)
       VALUES (?, ?, ?, ?, 'AUTO', ?)
-      ON CONFLICT(date, market_session) DO UPDATE SET
+      ON CONFLICT(date, market_session, currency) DO UPDATE SET
         datetime = excluded.datetime,
-        price_per_gram = excluded.price_per_gram,
-        currency = excluded.currency
-    `).bind(date, datetime, result.pricePerGram, result.currency, marketSession).run();
+        price_per_gram = excluded.price_per_gram
+    `);
 
-    console.log(`[scheduled] Saved price for ${date} (${marketSession})`);
+    await env.DB.batch(
+      results.map((result) =>
+        stmt.bind(date, datetime, result.pricePerGram, result.currency, marketSession)
+      )
+    );
+
+    console.log(`[scheduled] Saved prices for ${date} (${marketSession}): ${results.map((r) => `${r.currency}=${r.pricePerGram}`).join(', ')}`);
   } catch (error) {
-    console.error('[scheduled] Failed to fetch/save gold price:', error);
+    console.error('[scheduled] Failed to fetch/save gold prices:', error);
   }
 }

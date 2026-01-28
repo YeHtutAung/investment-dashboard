@@ -1,5 +1,8 @@
 const METALS_DEV_API_URL = 'https://api.metals.dev/v1/latest';
 
+export const SUPPORTED_CURRENCIES = ['USD', 'SGD', 'JPY'] as const;
+export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
+
 type MetalsDevResponse = {
   status: string;
   currency: string;
@@ -12,14 +15,17 @@ type MetalsDevResponse = {
 
 export type GoldPriceResult = {
   pricePerGram: number;
-  currency: string;
+  currency: SupportedCurrency;
   fetchedAt: string;
 };
 
-export async function fetchGoldPrice(apiKey: string): Promise<GoldPriceResult> {
+export async function fetchGoldPrice(
+  apiKey: string,
+  currency: SupportedCurrency = 'USD'
+): Promise<GoldPriceResult> {
   const url = new URL(METALS_DEV_API_URL);
   url.searchParams.set('api_key', apiKey);
-  url.searchParams.set('currency', 'USD');
+  url.searchParams.set('currency', currency);
   url.searchParams.set('unit', 'g');
 
   const response = await fetch(url.toString());
@@ -36,7 +42,14 @@ export async function fetchGoldPrice(apiKey: string): Promise<GoldPriceResult> {
 
   return {
     pricePerGram: data.metals.gold,
-    currency: data.currency || 'USD',
+    currency,
     fetchedAt: new Date().toISOString(),
   };
+}
+
+export async function fetchAllGoldPrices(apiKey: string): Promise<GoldPriceResult[]> {
+  const results = await Promise.all(
+    SUPPORTED_CURRENCIES.map((currency) => fetchGoldPrice(apiKey, currency))
+  );
+  return results;
 }
