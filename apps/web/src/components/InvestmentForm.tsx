@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import type { GoldType, Investment, CreateInvestmentInput } from '../lib/api';
 
 type Props = {

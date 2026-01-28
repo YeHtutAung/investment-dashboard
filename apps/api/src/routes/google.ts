@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { errorCodes } from 'shared';
 import {
   generateSessionId,
   generateUserId,

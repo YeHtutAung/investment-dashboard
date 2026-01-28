@@ -1,5 +1,5 @@
 import { Capacitor } from '@capacitor/core';
-import { Haptics, ImpactStyle } from '@capacitor/haptics';
+import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
 import { Keyboard } from '@capacitor/keyboard';
 import { StatusBar, Style } from '@capacitor/status-bar';
 
@@ -21,7 +21,7 @@ export async function hapticMedium() {
 
 export async function hapticSuccess() {
   if (isNative) {
-    await Haptics.notification({ type: 'success' as any });
+    await Haptics.notification({ type: NotificationType.Success });
   }
 }
 

@@ -27,7 +27,7 @@ export function createLogoutCookie(): string {
   return 'session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0';
 }
 
-export function getSessionIdFromCookie(cookie: string | null): string | null {
+export function getSessionIdFromCookie(cookie: string | null | undefined): string | null {
   if (!cookie) return null;
   const match = cookie.match(/session=([^;]+)/);
   return match ? match[1] : null;
